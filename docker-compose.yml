@@ -1,0 +1,73 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ulpf}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ulpf_local_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-ulpf}
+    volumes:
+      - ulpf_pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ulpf}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    volumes:
+      - ./backend/keys:/app/keys:ro
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-ulpf}:${POSTGRES_PASSWORD:-ulpf_local_dev}@postgres:5432/${POSTGRES_DB:-ulpf}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:8080}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-262144}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_MODEL: ${LLM_MODEL:-gemini-3.6-flash}
+      ENCRYPTION_ENABLED: ${ENCRYPTION_ENABLED:-true}
+      ENCRYPTION_PRIVATE_KEY_PATH: ${ENCRYPTION_PRIVATE_KEY_PATH:-/app/keys/receiver_private.pem}
+      ENCRYPTION_PUBLIC_KEY_PATH: ${ENCRYPTION_PUBLIC_KEY_PATH:-/app/keys/receiver_public.pem}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+  # --- Future scalability (disabled by default; not required for the MVP) ---
+  #
+  # opensearch:
+  #   image: opensearchproject/opensearch:2.16.0
+  #   environment:
+  #     - discovery.type=single-node
+  #     - DISABLE_SECURITY_PLUGIN=true
+  #   ports:
+  #     - "9200:9200"
+  #
+  # kafka:
+  #   image: bitnami/kafka:3.7
+  #   environment:
+  #     - KAFKA_CFG_NODE_ID=0
+  #     - KAFKA_CFG_PROCESS_ROLES=controller,broker
+  #     - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+  #     - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+  #   ports:
+  #     - "9092:9092"
+
+volumes:
+  ulpf_pg_data:

@@ -1,0 +1,5 @@
+{"EventID": 4624, "Computer": "WIN-SERVER01", "User": "Administrator", "IpAddress": "10.0.0.15", "TimeCreated": "2026-09-11T10:45:00Z", "LogonType": 3}
+{"EventID": 4625, "Computer": "WIN-SERVER01", "User": "guest", "IpAddress": "45.33.32.156", "TimeCreated": "2026-09-11T10:46:12Z", "LogonType": 3}
+{"EventID": 4634, "Computer": "WIN-SERVER02", "User": "jdoe", "IpAddress": "10.0.0.22", "TimeCreated": "2026-09-11T10:47:30Z"}
+{"EventID": 4720, "Computer": "WIN-DC01", "User": "svc_backup", "IpAddress": "10.0.0.5", "TimeCreated": "2026-09-11T10:48:02Z"}
+{"EventID": 4688, "Computer": "WIN-SERVER03", "User": "asmith", "IpAddress": "10.0.1.9", "TimeCreated": "2026-09-11T10:49:41Z"}

@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.db
+backend/ulpf.db
+backend/tests/_test_ulpf.db
+
+node_modules/
+dist/
+.vite/
+
+.env
+*.log
+.DS_Store
+
+# Local encryption keys
+backend/keys/*.pem
