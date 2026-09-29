@@ -7,7 +7,9 @@
 > heterogeneous security logs into a common, analytics-ready universal schema
 > while preserving the original raw log for forensic traceability.
 
-## 1. Problem statement
+---
+
+## 1. Problem Statement
 
 Enterprises generate logs from firewalls, servers, cloud services, operating
 systems, applications, and IoT devices, in formats ranging from Syslog and
@@ -16,26 +18,29 @@ someone has to write a vendor-specific parser for every source — expensive,
 slow, and hard to scale. ULPF replaces that per-vendor effort with a single
 extensible framework.
 
+---
+
 ## 2. Architecture
 
 ```
 KNOWN FORMAT                          UNKNOWN FORMAT
 Raw Log                               Raw Log
-  |                                     |
-Format Detection  ----------------------+
-  |                                     |
+  │                                     │
+Format Detection  ──────────────────────┤
+  │                                     │
 Deterministic Parser              No suitable parser
-  |                                     |
+  │                                     │
 Field Extraction                  AI/ML-assisted field discovery
-  |                                     |
+  │                                     │
 Universal Schema Mapping          Suggested field mapping + confidence
-  |                                     |
+  │                                     │
 Validation                        Human approval
-  |                                     |
-Storage  <-------------------------  Generate parser configuration
-  |                                     |
-Dashboard / API                   Store parser -> process future logs
-                                   deterministically from then on
+  │                                     │
+Blockchain Integrity Proof        Generate parser configuration
+  │                                     │
+Storage  ◄─────────────────────── Store parser → process future logs
+  │                                  deterministically from then on
+Dashboard / API
 ```
 
 Every raw log is written to `raw_logs` **before** any parsing happens, so
@@ -43,38 +48,58 @@ nothing is ever lost even if normalization fails. Every normalized event
 carries a `traceability` block linking it back to its exact `raw_log_id` and
 the exact `parser_id`/version that produced it.
 
+---
+
 ## 3. Features
 
-- Deterministic format detection (regex/signature-based, no ML on the known path)
-- Five built-in parsers: Cisco ASA syslog, Fortigate key=value syslog, Linux
-  auth/syslog, Windows Event Log (JSON), Apache access log
-- Vendor-neutral **Universal Event Schema** (Pydantic), extensible via an
-  `extensions` field so nothing is dropped in normalization
-- Full raw-log preservation + raw ↔ normalized traceability
-- Deterministic confidence scoring (not random) for every parsed event
-- **AI-assisted unknown-source onboarding**: heuristic field discovery →
-  human review/approval → generated parser → deterministic reuse on future
-  logs from that source (no LLM required; an LLM hook exists as an optional
-  enhancement)
-- Plugin/registry architecture — a new deterministic parser is one class + one
-  registry line, with zero changes to the pipeline
-- FastAPI REST API with full Swagger/OpenAPI docs
-- React + Vite + Tailwind + Chart.js SOC-style dashboard
-- Dockerized; `docker compose up --build` runs the whole stack
-- Architected so Kafka and OpenSearch/Elasticsearch can be added later
-  without changing the parsing/normalization core
+### Core Pipeline
+- **Deterministic format detection** — regex/signature-based, no ML on the known path
+- **Five built-in parsers**: Cisco ASA syslog, Fortigate key=value syslog, Linux auth/syslog, Windows Event Log (JSON), Apache access log
+- **Vendor-neutral Universal Event Schema** (Pydantic), extensible via an `extensions` field so nothing is dropped in normalization
+- **Full raw-log preservation** + raw ↔ normalized traceability
+- **Deterministic confidence scoring** (not random) for every parsed event
+- **Plugin/registry architecture** — a new deterministic parser is one class + one registry line, with zero changes to the pipeline
 
-## 4. Tech stack
+### AI-Assisted Unknown-Source Onboarding
+- Heuristic field discovery (timestamp / IP / key=value / ALL_CAPS-action / pipe-delimited formats)
+- Human review/approval → generated parser → deterministic reuse on future logs
+- No LLM required; an optional Gemini LLM hook enriches field discovery when configured
+- **Batch union analysis** — when a file contains multiple unknown-format logs, their discovered fields are unioned and a single set of parser candidates is computed, so the user can create/extend a parser covering the entire batch
+
+### Security & Integrity
+- **AES-256-GCM application-layer encryption** — the browser encrypts every payload before sending; the backend decrypts server-side
+- **SHA-256 integrity verification** — a hash is computed before encryption and verified after decryption to detect in-transit tampering
+- **Blockchain integrity ledger** — every processed event is recorded in a private SHA-256 hash-chain; each block links to the previous block's hash, enabling tamper-evident audit trails
+
+### Frontend Dashboard
+- **Overview** — real-time metrics, format/vendor/severity breakdowns, confidence gauges
+- **Log Analyzer** — unified analysis page: paste a log or upload a file; auto-detects known vs unknown; shows parser details, field mapping, parser candidates, and human approval actions
+- **Events** — browse normalized events
+- **Parser Registry** — view all registered parsers (deterministic + AI-generated)
+- **Traceability** — raw ↔ normalized ↔ parser audit trail per event
+
+### Deployment
+- Dockerized; `docker compose up --build` runs the whole stack
+- SQLite fallback for zero-setup local development
+- Architected so Kafka and OpenSearch/Elasticsearch can be added later without changing the parsing/normalization core
+
+---
+
+## 4. Tech Stack
 
 | Layer | Technology |
 |---|---|
 | Backend | Python, FastAPI, Pydantic, SQLAlchemy |
 | Database | PostgreSQL (SQLite fallback for zero-setup local dev) |
 | Frontend | React, Vite, Tailwind CSS, Chart.js |
+| Encryption | AES-256-GCM (Web Crypto API + `cryptography` library) |
+| Integrity | SHA-256 hash verification + blockchain hash-chain ledger |
 | Deployment | Docker, Docker Compose |
 | Future scale | Kafka/Redpanda, OpenSearch/Elasticsearch (planned, not required for MVP) |
 
-## 5. Project structure
+---
+
+## 5. Project Structure
 
 ```
 ulpf/
@@ -86,94 +111,182 @@ ulpf/
 │   │   ├── schemas/                Universal Event Schema + API models
 │   │   ├── detection/              deterministic format detector
 │   │   ├── parsers/                BaseLogParser, 5 parsers, registry
+│   │   ├── normalization/          universal event field mapper
 │   │   ├── validation/             event validator
-│   │   ├── onboarding/             heuristic engine, ParserGenerationService,
-│   │   │                           GeneratedParser
+│   │   ├── onboarding/             heuristic engine, LLM provider,
+│   │   │                           ParserGenerationService, GeneratedParser
 │   │   ├── services/               LogProcessingService (orchestration)
-│   │   └── api/v1/                 logs, events, parsers, onboarding, stats
-│   ├── tests/                      27 pytest tests
+│   │   ├── security/               AES-256-GCM encrypt/decrypt, SHA-256
+│   │   │                           integrity verification
+│   │   ├── blockchain/             private SHA-256 hash-chain ledger
+│   │   └── api/v1/                 logs, events, parsers, analyzer,
+│   │                               onboarding, blockchain, security, stats
+│   ├── scripts/                    generate_crypto_keys.py
+│   ├── tests/                      pytest test suite
+│   ├── keys/                       AES key (gitignored)
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/                  Overview, ProcessLogs, Events,
-│   │   │                           ParserRegistry, Onboarding, Traceability
+│   │   ├── pages/                  Overview, LogAnalyzer, EventsPage,
+│   │   │                           ParserRegistry, Traceability
 │   │   ├── components/             MetricCard, StatusChip
-│   │   └── services/api.js         typed fetch wrapper over the REST API
+│   │   └── services/
+│   │       ├── api.js              typed fetch wrapper over the REST API
+│   │       └── secureCrypto.js     AES-256-GCM encryption + SHA-256 hashing
 │   └── Dockerfile
 ├── data/                           sample logs: cisco, fortigate, linux,
 │                                   windows, apache, unknown
-├── docs/architecture.md            2-page architecture document
+├── docs/
+│   ├── architecture.md             architecture document
+│   └── SECURITY_ENCRYPTION.md      encryption flow documentation
 ├── docker-compose.yml
 └── .env.example
 ```
 
-## 6. Local setup (without Docker)
+---
 
-**Backend:**
+## 6. Local Setup (Without Docker)
+
+### Backend
+
 ```bash
 cd backend
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv
+# On macOS/Linux:
+source .venv/bin/activate
+# On Windows:
+.venv\Scripts\activate
+
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+
+# Generate the AES-256 encryption key (run once)
+python -m scripts.generate_crypto_keys
+
+# Start the server
+uvicorn app.main:app --reload --env-file .env
 # Swagger UI at http://localhost:8000/docs
 ```
+
 By default the backend uses a local SQLite file (`ulpf.db`) — zero setup
 required. Set `DATABASE_URL` to point at Postgres instead when needed.
 
-**Frontend:**
+### Frontend
+
 ```bash
 cd frontend
 npm install
-cp .env.example .env   # adjust VITE_API_BASE_URL if needed
 npm run dev
 # App at http://localhost:5173
 ```
 
-## 7. Docker setup
+---
+
+## 7. Docker Setup
 
 ```bash
 cp .env.example .env   # optional, defaults work out of the box
 docker compose up --build
 ```
-- Frontend: http://localhost:8080
-- Backend + Swagger: http://localhost:8000/docs
-- Postgres: localhost:5432
+
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:8080 |
+| Backend + Swagger | http://localhost:8000/docs |
+| Postgres | localhost:5432 |
 
 Kafka and OpenSearch are intentionally **not** part of the default compose
 file — see the commented services at the bottom of `docker-compose.yml` for
 how they'd be added once volume justifies streaming ingestion.
 
-## 8. Environment variables
+---
 
-See `.env.example` (root, for Docker) and `frontend/.env.example`. No secrets
-are hardcoded anywhere; `LLM_API_KEY` is optional and the app is fully
-functional without it.
+## 8. Environment Variables
 
-## 9. API documentation
+See [`.env.example`](.env.example). No secrets are hardcoded anywhere.
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | `sqlite:///./ulpf.db` | Database connection string |
+| `CORS_ORIGINS` | `http://localhost:5173` | Comma-separated allowed origins |
+| `ENCRYPTION_ENABLED` | `true` | Enable AES-256-GCM payload encryption |
+| `ENCRYPTION_KEY_PATH` | `backend/keys/aes_secret.key` | Path to the AES key file |
+| `GCP_API_KEY` | — | Gemini API key (optional, for LLM-enhanced onboarding) |
+| `LLM_PROVIDER` | — | Set to `gemini` to enable LLM field inference |
+| `LLM_MODEL` | `gemini-3.6-flash` | Gemini model to use |
+| `VITE_API_BASE_URL` | `http://localhost:8000/api/v1` | Frontend API base URL |
+
+---
+
+## 9. API Documentation
 
 Full interactive docs are auto-generated by FastAPI at `/docs` (Swagger) and
 `/redoc`. Key endpoints:
 
+### Log Processing
+
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/v1/logs/ingest` | Store a raw log without processing |
-| POST | `/api/v1/logs/process` | Ingest + run the full pipeline |
-| POST | `/api/v1/logs/process/batch` | Process multiple raw logs |
-| GET | `/api/v1/logs`, `/api/v1/logs/{id}` | List / fetch raw logs |
-| GET | `/api/v1/events`, `/api/v1/events/{id}` | List / fetch normalized events |
+| POST | `/api/v1/logs/secure-process` | AES-encrypted single log ingest + process |
+| POST | `/api/v1/logs/secure-process-batch` | AES-encrypted batch processing |
+| GET | `/api/v1/logs` | List raw logs |
+| GET | `/api/v1/logs/{id}` | Fetch a single raw log |
+
+### Unified Log Analyzer
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/v1/analyzer/analyze` | Analyze a single log (auto-detect known/unknown) |
+| POST | `/api/v1/analyzer/analyze-secure` | AES-encrypted single log analysis |
+| POST | `/api/v1/analyzer/analyze-batch-secure` | AES-encrypted batch analysis with union of unknown fields |
+| POST | `/api/v1/analyzer/approve` | Human approval: extend existing parser or create new one |
+
+### Events & Traceability
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/v1/events` | List normalized events |
+| GET | `/api/v1/events/{id}` | Fetch a single normalized event |
 | GET | `/api/v1/events/{id}/trace` | Raw ↔ parser ↔ normalized traceability |
-| GET | `/api/v1/parsers`, `/api/v1/parsers/{id}` | Parser registry |
-| POST | `/api/v1/onboarding/analyze` | Heuristic field discovery for an unknown log |
-| POST | `/api/v1/onboarding/create-parser` | Persist a human-approved mapping as a parser |
+
+### Parsers
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/v1/parsers` | List all parsers (deterministic + AI-generated) |
+| GET | `/api/v1/parsers/{id}` | Fetch a single parser |
+
+### Blockchain Integrity
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/v1/blockchain/status` | Chain validity + block count |
+| GET | `/api/v1/blockchain/blocks` | Full blockchain data |
+| GET | `/api/v1/blockchain/verify/{event_id}` | Verify a specific event against the chain |
+
+### Security & Infrastructure
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/v1/security/encryption-key` | Fetch the shared AES key (must be over HTTPS in production) |
 | GET | `/api/v1/stats` | Dashboard metrics |
 | GET | `/api/v1/health` | Health check |
 
-## 10. Supported formats (MVP)
+---
 
-Cisco ASA syslog · Fortigate key=value syslog · Linux auth/syslog ·
-Windows Event Log (JSON) · Apache Common/Combined access log · plus any
-custom source onboarded through the AI-assisted flow.
+## 10. Supported Formats (MVP)
+
+| Format | Vendor | Detection Method |
+|---|---|---|
+| Syslog (RFC) | Cisco ASA | `%ASA-n-nnnnnn` signature |
+| Key=value syslog | Fortinet (Fortigate) | `devname=`, `srcip=`, `dstip=` keys |
+| Linux syslog | Linux | `Mon DD HH:MM:SS host process[pid]:` pattern |
+| JSON event log | Microsoft (Windows) | `EventID` + `Computer` keys |
+| Common/Combined Log | Apache | IP - - [timestamp] "METHOD path" status pattern |
+| Custom (pipe-delimited, key=value, etc.) | Any | AI-assisted onboarding → generated parser |
+
+---
 
 ## 11. Universal Event Schema
 
@@ -183,100 +296,185 @@ custom source onboarded through the AI-assisted flow.
   "timestamp": "...",
   "source": { "vendor": "Cisco", "product": "ASA", "format": "syslog" },
   "event": { "type": "network_connection", "action": "allowed", "severity": "low" },
-  "network": { "source_ip": "192.168.1.10", "source_port": 443,
-               "destination_ip": "8.8.8.8", "destination_port": 443, "protocol": "TCP" },
+  "network": {
+    "source_ip": "192.168.1.10", "source_port": 443,
+    "destination_ip": "8.8.8.8", "destination_port": 443,
+    "protocol": "TCP"
+  },
   "user": { "username": null },
   "http": { "method": null, "path": null, "status_code": null, "user_agent": null },
   "host": { "hostname": "FW01" },
   "parser": { "name": "cisco_syslog_v1", "version": "1.0", "confidence": 0.98 },
-  "traceability": { "raw_log_id": "RAW-...", "parser_id": "cisco_syslog_v1-v1.0", "ingested_at": "..." },
+  "traceability": {
+    "raw_log_id": "RAW-...",
+    "parser_id": "cisco_syslog_v1-v1.0",
+    "ingested_at": "..."
+  },
   "extensions": {}
 }
 ```
+
 Fields that don't map onto the fixed taxonomy are kept under `extensions`
 rather than dropped — normalization is additive, never lossy.
 
-## 12. Unknown-source onboarding
+---
 
-1. `POST /onboarding/analyze` — runs a deterministic heuristic engine
-   (timestamp / IP / key=value / ALL_CAPS-action detection) over one sample
-   line and proposes a field mapping with a confidence score per field.
-2. A human reviews/edits the mapping in the UI.
-3. `POST /onboarding/create-parser` — persists the approved mapping as an
-   `ai_generated` parser.
-4. Every subsequent log from that source is parsed **deterministically** by
-   the generated parser — no further AI assistance needed.
+## 12. Unknown-Source Onboarding
 
-If `LLM_API_KEY` is set and `LLM_PROVIDER=gemini`, step 1 is extended with a
-real Gemini call that fills in any fields the heuristic engine missed —
-**heuristic suggestions are never overridden**, the LLM only adds fields
-that are still missing. Without a key configured (or if Gemini is
-unreachable, e.g. in an air-gapped deployment), the heuristic engine alone
-is the complete, working fallback — the LLM call fails safe and simply
-contributes nothing rather than breaking onboarding.
+### Single Log Analysis
+
+1. **Analyze** — `POST /analyzer/analyze` runs a deterministic heuristic engine
+   (timestamp / IP / key=value / ALL_CAPS-action / pipe-delimited format detection)
+   over the log and proposes a field mapping with a per-field confidence score.
+2. **Review** — The user reviews/edits the discovered fields and sees existing
+   parser candidates ranked by field-overlap percentage.
+3. **Approve** — `POST /analyzer/approve` with `action: "create_parser"` or
+   `action: "extend_parser"` persists the approved mapping.
+4. **Reuse** — Every subsequent log from that source is parsed
+   **deterministically** by the generated parser — no further AI assistance
+   needed. The parser is immediately recognized on the next analysis.
+
+### Batch File Analysis
+
+When a file contains multiple unknown-format logs, ULPF **unions** all
+discovered fields across every unknown line and computes a single set of
+parser candidates against the combined field set. This means:
+
+- The user sees one unified analysis covering the whole file
+- They can create/extend a parser that handles **all** the log variants in that file
+- Known-format lines in the same file are still processed individually
+
+### Optional LLM Enhancement
+
+If `GCP_API_KEY` is set and `LLM_PROVIDER=gemini`, the heuristic engine is
+extended with a Gemini call that fills in fields the heuristics missed.
+**Heuristic suggestions are never overridden** — the LLM only adds fields
+that are still missing. Without a key configured, the heuristic engine alone
+is the complete, working fallback.
 
 ```bash
 # .env
-LLM_API_KEY=your-gemini-api-key
+GCP_API_KEY=your-gemini-api-key
 LLM_PROVIDER=gemini
 LLM_MODEL=gemini-3.6-flash   # optional
 ```
 
-## 13. Example API requests
+---
 
-```bash
-# Process a known Cisco log
-curl -X POST localhost:8000/api/v1/logs/process \
-  -H 'Content-Type: application/json' \
-  -d '{"raw_log": "<134>Sep 11 10:32:14 FW01 %ASA-6-302013: Built outbound TCP connection 12345 for outside:192.168.1.10/443 to 8.8.8.8/443"}'
+## 13. Application-Layer Encryption
 
-# Analyze an unknown source
-curl -X POST localhost:8000/api/v1/onboarding/analyze \
-  -H 'Content-Type: application/json' \
-  -d '{"raw_log": "2026/09/11 10:51:23 AUTH-SRV LOGIN_SUCCESS user=admin src=10.20.4.15"}'
+ULPF encrypts browser-to-backend payloads using **AES-256-GCM**:
+
+```
+Browser                                   Backend
+  │                                         │
+  ├─ GET /security/encryption-key ─────────►│ (served over HTTPS/TLS)
+  │◄─── { key_hex: "..." } ────────────────┤
+  │                                         │
+  ├─ SHA-256 hash of plaintext              │
+  ├─ AES-256-GCM encrypt (random IV)       │
+  ├─ POST { iv, ciphertext, hash } ───────►│
+  │                                         ├─ AES-256-GCM decrypt
+  │                                         ├─ SHA-256 re-hash
+  │                                         ├─ Compare hashes → VERIFIED / TAMPERED
+  │                                         ├─ Process log(s)
+  │◄──── { result, integrity_status } ─────┤
 ```
 
-## 14. Application-layer encryption
+- **Key exchange** is secured by HTTPS/TLS (no RSA key wrapping)
+- The shared AES-256 key is generated once with `python -m scripts.generate_crypto_keys`
+- SHA-256 integrity hash detects any in-transit tampering even if the attacker can decrypt
 
-ULPF supports encrypted browser-to-backend payloads using hybrid cryptography:
-AES-256-GCM encrypts each request and RSA-OAEP-3072 protects the per-request AES key.
-The browser uses only the receiver public key; the backend private key decrypts the payload.
-Generate the local receiver key pair with `python backend/scripts/generate_crypto_keys.py`.
-See `docs/SECURITY_ENCRYPTION.md` for the full flow and production guidance.
+Generate the AES key:
+```bash
+cd backend
+python -m scripts.generate_crypto_keys
+```
 
-## 15. Testing
+See [`docs/SECURITY_ENCRYPTION.md`](docs/SECURITY_ENCRYPTION.md) for the full
+flow and production guidance.
+
+---
+
+## 14. Blockchain Integrity Ledger
+
+Every successfully processed event is recorded in a **private SHA-256 hash-chain**
+stored at `data/blockchain/ledger.json`:
+
+- Each block stores: `event_hash`, `raw_log_hash`, `parser_id`, and `previous_hash`
+- The chain starts with a genesis block
+- Verification endpoint: `GET /api/v1/blockchain/verify/{event_id}` re-hashes
+  the event and raw log from the database and compares against the stored block
+- Chain integrity: `GET /api/v1/blockchain/status` validates every block's
+  `previous_hash` linkage
+
+This provides a tamper-evident audit trail — if any stored event or raw log is
+modified after processing, the blockchain verification will detect the mismatch.
+
+---
+
+## 15. Example API Requests
+
+```bash
+# Process a known Cisco log (encrypted)
+curl -X POST localhost:8000/api/v1/logs/secure-process \
+  -H 'Content-Type: application/json' \
+  -d '{ ... encrypted envelope ... }'
+
+# Analyze an unknown source (plaintext, for testing)
+curl -X POST localhost:8000/api/v1/analyzer/analyze \
+  -H 'Content-Type: application/json' \
+  -d '{"raw_log": "2026/09/11 10:51:23 AUTH-SRV LOGIN_SUCCESS user=admin src=10.20.4.15"}'
+
+# Create a parser from approved fields
+curl -X POST localhost:8000/api/v1/analyzer/approve \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "action": "create_parser",
+    "raw_log": "2026/09/11 10:51:23 AUTH-SRV LOGIN_SUCCESS user=admin src=10.20.4.15",
+    "parser_name": "auth_kv_v1",
+    "approved_fields": [...]
+  }'
+
+# Check blockchain integrity
+curl localhost:8000/api/v1/blockchain/status
+
+# Verify a specific event against the chain
+curl localhost:8000/api/v1/blockchain/verify/ULPF-abc123def456
+```
+
+---
+
+## 16. Testing
 
 ```bash
 cd backend
 pytest -q
 ```
-27 tests covering: format detection, all five parsers, universal-schema
-validation, raw ↔ normalized traceability, and the full unknown-source
-onboarding flow (analyze → approve → create parser → auto-parse a second log).
 
-## 15. Future scalability
+Test suite covers: format detection, all five deterministic parsers,
+universal-schema validation, raw ↔ normalized traceability, LLM onboarding,
+API endpoints, and the full unknown-source onboarding flow (analyze → approve
+→ create parser → auto-parse a second log).
+
+---
+
+## 17. Future Scalability
 
 - Swap SQLite/Postgres writes for a Kafka/Redpanda topic ahead of the
   processing service for high-throughput ingestion (billions of events/day)
 - Add OpenSearch/Elasticsearch as a secondary sink for full-text search and
   SIEM-style dashboards, alongside Postgres for relational/audit queries
-- Swap the heuristic-only onboarding engine for an optional LLM-backed one
-  (the `ParserGenerationService` abstraction is already in place for this)
-- Add Parquet/Iceberg export from the raw store for large-scale data-lake
-  and ML training use cases
 - Extend the parser registry beyond perimeter devices to servers, cloud,
   identity, and endpoint sources — no core pipeline changes required
+- Add Parquet/Iceberg export from the raw store for large-scale data-lake
+  and ML training use cases
 
-## 16. Air-gap and container notes
+---
+
+## 18. Air-Gap and Container Notes
 
 Every component (Postgres, FastAPI, the React build served via nginx) is
 self-hostable with no external API calls required at runtime, satisfying
-air-gapped deployment. `LLM_API_KEY` is the only optional external
-dependency and the system is fully functional without it.
-
-
-## Log file upload / batch processing
-
-The Process Logs page supports uploading `.txt`, `.log`, and `.csv` files. Each non-empty line is processed as an individual log event. The browser encrypts the complete batch with AES-256-GCM and protects the per-request AES key with the receiver RSA-OAEP public key before sending it to `POST /api/v1/logs/secure-process-batch`. The backend decrypts the batch, applies the existing deterministic/generated parsers, and returns per-line statuses plus a summary in the UI.
-
-The local demo limits uploads to 5 MB and 10,000 non-empty lines. Unknown lines remain marked `UNKNOWN_FORMAT` and can be onboarded through the Unknown Source Onboarding workflow.
+air-gapped deployment. `GCP_API_KEY` is the only optional external dependency
+and the system is fully functional without it.
