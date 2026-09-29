@@ -1,6 +1,15 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+# Load .env from the backend root so os.getenv() picks up values
+# *before* the Settings class body is evaluated.  Existing real
+# env-vars (e.g. from docker-compose) still take precedence.
+from dotenv import load_dotenv
+
+_env_path = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(_env_path, override=False)
 
 
 class Settings:
