@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.database import models
 from app.database.session import get_db
 from app.onboarding.parser_generation_service import parser_generation_service
+from app.services.log_processing_service import log_processing_service
 from app.parsers.registry import parser_registry
 from app.core.config import settings
 from app.security.crypto import decrypt_with_config
@@ -77,6 +78,11 @@ def create_parser(payload: OnboardingCreateParserRequest, db: Session = Depends(
     db.add(row)
     db.commit()
     db.refresh(row)
+
+    # Process the original raw log through the newly created parser
+    # so the event is recorded and appears on the Events page
+    log_processing_service.ingest_and_process(db, payload.raw_log)
+
     return {"parser": row, "config": config}
 
 
@@ -110,4 +116,8 @@ def create_parser_secure(payload: EncryptedEnvelope, db: Session = Depends(get_d
     db.add(row)
     db.commit()
     db.refresh(row)
+
+    # Process the original raw log through the newly created parser
+    log_processing_service.ingest_and_process(db, request.raw_log)
+
     return {"parser": row, "config": config}

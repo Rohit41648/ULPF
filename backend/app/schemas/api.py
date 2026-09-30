@@ -143,6 +143,7 @@ class FieldAnalysis(BaseModel):
     source: str = "unknown"  # regex | key_value | positional | llm_assisted
     data_type: str = "string"
     status: str = "matched"  # matched | unmatched | new
+    raw_token: Optional[str] = None  # original token from the log (e.g. "user=jdoe")
 
 
 class ParserCandidate(BaseModel):

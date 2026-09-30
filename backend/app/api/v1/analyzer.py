@@ -24,6 +24,8 @@ from app.parsers.base import BaseLogParser
 from app.parsers.registry import parser_registry
 from app.security.crypto import decrypt_and_verify
 from app.services.log_processing_service import log_processing_service
+from app.schemas.universal_event import UniversalEvent
+from app.validation.validator import validate_event
 from app.schemas.api import (
     AnalyzerResult,
     AnalyzerBatchResult,
@@ -243,6 +245,7 @@ def _analyze_unknown(raw_log: str, db: Session | None = None) -> AnalyzerResult:
             source=f.get("source", "unknown"),
             data_type=_infer_data_type(field_name, f.get("value")),
             status="new",
+            raw_token=f.get("raw_token"),
         ))
 
     # Compute parser candidates (includes DB-stored AI-generated parsers)
@@ -377,6 +380,7 @@ def analyze_batch_secure(
                         source=f.get("source", "unknown"),
                         data_type=_infer_data_type(field_name, f.get("value")),
                         status="new",
+                        raw_token=f.get("raw_token"),
                     )
 
         # Compute parser candidates using the UNION of all discovered fields
@@ -441,10 +445,50 @@ def approve_action(
         db.commit()
         db.refresh(existing)
 
+        # Process the original raw log so an event is recorded.
+        # Use the extended parser directly rather than relying on auto-detection.
+        raw_log_record = log_processing_service.ingest_raw_log(db, payload.raw_log)
+        extended_parser = GeneratedParser(current_config)
+        event: UniversalEvent = extended_parser.normalize(payload.raw_log, raw_log_record.id)
+        validation = validate_event(event)
+
+        raw_log_record.detected_format = extended_parser.format
+        raw_log_record.detected_vendor = extended_parser.vendor
+
+        normalized_event = models.NormalizedEvent(
+            raw_log_id=raw_log_record.id,
+            parser_id=existing.id,
+            event_data=event.model_dump(mode="json"),
+            event_type=event.event.type,
+            severity=event.event.severity,
+            vendor=event.source.vendor,
+            format=event.source.format,
+            source_ip=event.network.source_ip,
+            confidence=event.parser.confidence,
+            processing_status=validation.status,
+            validation_warnings=validation.warnings,
+            validation_errors=validation.errors,
+        )
+        db.add(normalized_event)
+
+        existing.events_processed = (existing.events_processed or 0) + 1
+
+        db.add(models.ProcessingRun(
+            raw_log_id=raw_log_record.id,
+            event_id=None,
+            status=validation.status,
+            detected_format=extended_parser.format,
+            parser_used=extended_parser.name,
+            message="; ".join(validation.warnings + validation.errors) or "Processed successfully.",
+        ))
+        db.commit()
+        db.refresh(normalized_event)
+
         return {
             "action": "extended",
             "parser_name": existing.name,
             "parser_id": existing.id,
+            "event_id": normalized_event.id,
             "message": f"Extended parser '{existing.name}' with {len(payload.approved_fields)} new fields.",
         }
 
@@ -471,12 +515,56 @@ def approve_action(
         db.commit()
         db.refresh(row)
 
+        # Process the original raw log through the newly created parser
+        # so the event is recorded and appears on the Events page.
+        # We explicitly use the new GeneratedParser rather than relying on
+        # ingest_and_process's auto-detection, which can fail when the
+        # parser's detect() method doesn't match (e.g. non-KV log formats).
+        raw_log_record = log_processing_service.ingest_raw_log(db, payload.raw_log)
+        new_parser = GeneratedParser(config)
+        event: UniversalEvent = new_parser.normalize(payload.raw_log, raw_log_record.id)
+        validation = validate_event(event)
+
+        raw_log_record.detected_format = new_parser.format
+        raw_log_record.detected_vendor = new_parser.vendor
+
+        normalized_event = models.NormalizedEvent(
+            raw_log_id=raw_log_record.id,
+            parser_id=row.id,
+            event_data=event.model_dump(mode="json"),
+            event_type=event.event.type,
+            severity=event.event.severity,
+            vendor=event.source.vendor,
+            format=event.source.format,
+            source_ip=event.network.source_ip,
+            confidence=event.parser.confidence,
+            processing_status=validation.status,
+            validation_warnings=validation.warnings,
+            validation_errors=validation.errors,
+        )
+        db.add(normalized_event)
+
+        row.events_processed = (row.events_processed or 0) + 1
+
+        db.add(models.ProcessingRun(
+            raw_log_id=raw_log_record.id,
+            event_id=None,
+            status=validation.status,
+            detected_format=new_parser.format,
+            parser_used=new_parser.name,
+            message="; ".join(validation.warnings + validation.errors) or "Processed successfully.",
+        ))
+        db.commit()
+        db.refresh(normalized_event)
+
         return {
             "action": "created",
             "parser_name": row.name,
             "parser_id": row.id,
+            "event_id": normalized_event.id,
             "message": f"Created new parser '{row.name}' with {len(payload.approved_fields)} fields.",
         }
 
     else:
         raise HTTPException(400, detail=f"Unknown action '{payload.action}'. Use 'extend_parser' or 'create_parser'.")
+
