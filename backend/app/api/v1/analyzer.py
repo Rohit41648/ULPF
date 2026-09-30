@@ -86,25 +86,26 @@ def _infer_data_type(field: str, value: Any) -> str:
 # ── Find parser (in-memory + DB-stored AI-generated) ────────────────────
 
 def _find_matching_parser(raw_log: str, db: Session | None = None) -> BaseLogParser | None:
-    """Check the in-memory deterministic registry first, then fall back to
-    DB-stored AI-generated parsers so that parsers the user just created
-    are recognised immediately."""
+    """Check DB-stored AI-generated (custom) parsers first — they are more
+    specific because the user explicitly created them — then fall back to
+    built-in deterministic parsers."""
+    # Custom / AI-generated parsers take priority
+    if db is not None:
+        generated_rows = (
+            db.query(models.Parser)
+            .filter(models.Parser.source_type == "ai_generated", models.Parser.status == "active")
+            .all()
+        )
+        for row in generated_rows:
+            candidate = GeneratedParser(row.config or {})
+            if candidate.detect(raw_log):
+                return candidate
+
+    # Fall back to built-in deterministic parsers
     parser = parser_registry.find_matching_parser(raw_log)
     if parser:
         return parser
 
-    if db is None:
-        return None
-
-    generated_rows = (
-        db.query(models.Parser)
-        .filter(models.Parser.source_type == "ai_generated", models.Parser.status == "active")
-        .all()
-    )
-    for row in generated_rows:
-        candidate = GeneratedParser(row.config or {})
-        if candidate.detect(raw_log):
-            return candidate
     return None
 
 

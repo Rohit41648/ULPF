@@ -58,11 +58,8 @@ class LogProcessingService:
         return raw_log
 
     def _find_parser(self, db: Session, raw_content: str) -> BaseLogParser | None:
-        parser = parser_registry.find_matching_parser(raw_content)
-        if parser:
-            return parser
-
-        # fall back to DB-stored AI-generated parsers
+        # Check DB-stored AI-generated (custom) parsers first — they are more
+        # specific because the user explicitly created them for this log type.
         generated_rows = (
             db.query(models.Parser)
             .filter(models.Parser.source_type == "ai_generated", models.Parser.status == "active")
@@ -72,6 +69,12 @@ class LogProcessingService:
             candidate = GeneratedParser(row.config or {})
             if candidate.detect(raw_content):
                 return candidate
+
+        # Fall back to built-in deterministic parsers
+        parser = parser_registry.find_matching_parser(raw_content)
+        if parser:
+            return parser
+
         return None
 
     def process_raw_log(self, db: Session, raw_log: models.RawLog) -> models.NormalizedEvent:
