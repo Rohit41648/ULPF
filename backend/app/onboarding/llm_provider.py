@@ -91,10 +91,14 @@ def suggest_fields_via_llm(raw_log: str) -> list[dict]:
                     "source": "llm_assisted",
                     "raw_token": value,
                 })
+        with open("llm_debug_success.txt", "w") as f:
+            f.write(f"TEXT:\n{text}\nSUGGESTIONS:\n{suggestions}")
         return suggestions
 
     except Exception as exc:  # noqa: BLE001 - deliberately broad: any
         # failure here must degrade to "no LLM suggestions", never crash
         # the onboarding request.
         logger.warning("LLM-assisted field discovery failed, continuing with heuristics only: %s", exc)
+        with open("llm_debug_err.txt", "w") as f:
+            f.write(str(exc))
         return []

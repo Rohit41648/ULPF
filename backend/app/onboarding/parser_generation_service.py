@@ -35,8 +35,10 @@ class ParserGenerationService:
         result = self._engine.analyze(raw_log)
 
         if llm_provider.is_available():
+            print("DEBUG: LLM IS AVAILABLE IN PARSER_GENERATION_SERVICE")
             already_found = {s.field for s in result.suggestions}
             llm_suggestions = llm_provider.suggest_fields_via_llm(raw_log)
+            print("DEBUG: LLM RETURNED:", llm_suggestions)
             for item in llm_suggestions:
                 if item["field"] not in already_found:
                     from app.onboarding.heuristics import FieldSuggestion
@@ -50,6 +52,12 @@ class ParserGenerationService:
                 result.overall_confidence = round(
                     sum(s.confidence for s in result.suggestions) / len(result.suggestions), 2
                 )
+
+        with open("parser_service_debug.txt", "w") as f:
+            f.write(f"is_available: {llm_provider.is_available()}\n")
+            f.write(f"API_KEY: {llm_provider.settings.LLM_API_KEY[:5] if llm_provider.settings.LLM_API_KEY else None}\n")
+            f.write(f"PROVIDER: {llm_provider.settings.LLM_PROVIDER}\n")
+            f.write(f"suggestions: {result.suggestions}")
 
         return result
 

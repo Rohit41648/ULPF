@@ -1,0 +1,4 @@
+is_available: True
+API_KEY: AQ.Ab
+PROVIDER: gemini
+suggestions: [FieldSuggestion(field='hostname', value='A7F2', confidence=0.9, source='positional', raw_token='A7F2')]

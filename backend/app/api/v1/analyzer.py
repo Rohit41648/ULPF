@@ -267,6 +267,19 @@ def _analyze_unknown(raw_log: str, db: Session | None = None) -> AnalyzerResult:
 
 # ── API endpoints ────────────────────────────────────────────────────────
 
+@router.get("/debug-llm")
+def debug_llm():
+    from app.onboarding import llm_provider
+    from app.core.config import settings
+    import os
+    return {
+        "is_available": llm_provider.is_available(),
+        "settings_key": settings.LLM_API_KEY,
+        "env_key": os.getenv("LLM_API_KEY"),
+        "provider": settings.LLM_PROVIDER,
+        "model": settings.LLM_MODEL
+    }
+
 @router.post("/analyze", response_model=AnalyzerResult)
 def analyze_log(
     payload: dict[str, str],
