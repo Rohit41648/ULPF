@@ -229,7 +229,16 @@ export default function Overview() {
             View all
           </Link>
         </div>
-        <table className="w-full text-sm">
+        <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '30%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '13%' }} />
+          </colgroup>
           <thead>
             <tr className="text-left text-xs text-mist border-b border-line">
               <th className="px-4 py-2 font-normal">Time</th>
@@ -244,13 +253,13 @@ export default function Overview() {
           <tbody>
             {events.map((e) => (
               <tr key={e.id} className="border-b border-line last:border-0 hover:bg-panel2/60">
-                <td className="px-4 py-2 mono text-mist">{new Date(e.created_at).toLocaleTimeString()}</td>
-                <td className="px-4 py-2">{e.vendor || '—'}</td>
-                <td className="px-4 py-2 text-mist">{e.format || '—'}</td>
-                <td className="px-4 py-2">{e.event_type || '—'}</td>
-                <td className="px-4 py-2 mono">{e.source_ip || '—'}</td>
-                <td className="px-4 py-2">{e.confidence != null ? `${Math.round(e.confidence * 100)}%` : '—'}</td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2 mono text-mist whitespace-nowrap">{new Date(e.created_at).toLocaleTimeString()}</td>
+                <td className="px-4 py-2 whitespace-nowrap">{e.vendor || '—'}</td>
+                <td className="px-4 py-2 text-mist whitespace-nowrap">{e.format || '—'}</td>
+                <td className="px-4 py-2 whitespace-nowrap">{e.event_type || '—'}</td>
+                <td className="px-4 py-2 mono overflow-hidden text-ellipsis whitespace-nowrap" title={e.source_ip || ''}>{e.source_ip || '—'}</td>
+                <td className="px-4 py-2 whitespace-nowrap">{e.confidence != null ? `${Math.round(e.confidence * 100)}%` : '—'}</td>
+                <td className="px-4 py-2 whitespace-nowrap">
                   <StatusChip value={e.processing_status} />
                 </td>
               </tr>
