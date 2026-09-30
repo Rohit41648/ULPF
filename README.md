@@ -105,43 +105,125 @@ the exact `parser_id`/version that produced it.
 ulpf/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                 FastAPI app + router wiring
-│   │   ├── core/                   config, logging
-│   │   ├── database/               SQLAlchemy models, session, init/seed
-│   │   ├── schemas/                Universal Event Schema + API models
-│   │   ├── detection/              deterministic format detector
-│   │   ├── parsers/                BaseLogParser, 5 parsers, registry
-│   │   ├── normalization/          universal event field mapper
-│   │   ├── validation/             event validator
-│   │   ├── onboarding/             heuristic engine, LLM provider,
-│   │   │                           ParserGenerationService, GeneratedParser
-│   │   ├── services/               LogProcessingService (orchestration)
-│   │   ├── security/               AES-256-GCM encrypt/decrypt, SHA-256
-│   │   │                           integrity verification
-│   │   ├── blockchain/             private SHA-256 hash-chain ledger
-│   │   └── api/v1/                 logs, events, parsers, analyzer,
-│   │                               onboarding, blockchain, security, stats
-│   ├── scripts/                    generate_crypto_keys.py
-│   ├── tests/                      pytest test suite
-│   ├── keys/                       AES key (gitignored)
+│   │   ├── __init__.py
+│   │   ├── main.py                        FastAPI app + router wiring
+│   │   ├── api/
+│   │   │   ├── __init__.py
+│   │   │   └── v1/
+│   │   │       ├── __init__.py
+│   │   │       ├── analyzer.py            unified log analysis (known + unknown)
+│   │   │       ├── blockchain.py          blockchain status & verification
+│   │   │       ├── events.py              normalized event CRUD
+│   │   │       ├── logs.py                raw log ingest & secure processing
+│   │   │       ├── onboarding.py          unknown-source onboarding endpoints
+│   │   │       ├── parsers.py             parser registry listing
+│   │   │       ├── security.py            encryption key exchange
+│   │   │       └── stats.py               dashboard metrics
+│   │   ├── blockchain/
+│   │   │   ├── __init__.py
+│   │   │   └── ledger.py                  private SHA-256 hash-chain ledger
+│   │   ├── core/
+│   │   │   ├── __init__.py
+│   │   │   ├── config.py                  settings & environment variables
+│   │   │   └── logging.py                 logging configuration
+│   │   ├── database/
+│   │   │   ├── __init__.py
+│   │   │   ├── init_db.py                 DB initialization & seed data
+│   │   │   ├── models.py                  SQLAlchemy ORM models
+│   │   │   └── session.py                 DB session / engine setup
+│   │   ├── detection/
+│   │   │   ├── __init__.py
+│   │   │   └── format_detector.py         deterministic format detection
+│   │   ├── normalization/
+│   │   │   ├── __init__.py
+│   │   │   └── universal_event_mapper.py  maps parsed fields → universal schema
+│   │   ├── onboarding/
+│   │   │   ├── __init__.py
+│   │   │   ├── generated_parser.py        runtime-generated parser class
+│   │   │   ├── heuristics.py              heuristic field discovery engine
+│   │   │   ├── llm_provider.py            optional Gemini LLM integration
+│   │   │   └── parser_generation_service.py  creates parsers from approved fields
+│   │   ├── parsers/
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py                    BaseLogParser abstract class
+│   │   │   ├── registry.py               parser registry (lookup by format)
+│   │   │   ├── apache.py                  Apache access log parser
+│   │   │   ├── cisco.py                   Cisco ASA syslog parser
+│   │   │   ├── fortigate.py              Fortigate key=value parser
+│   │   │   ├── linux.py                   Linux auth/syslog parser
+│   │   │   └── windows.py                Windows Event Log (JSON) parser
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── api.py                     API request/response models
+│   │   │   └── universal_event.py         Universal Event Schema (Pydantic)
+│   │   ├── security/
+│   │   │   ├── __init__.py
+│   │   │   └── crypto.py                  AES-256-GCM encrypt/decrypt + SHA-256
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   └── log_processing_service.py  pipeline orchestration service
+│   │   └── validation/
+│   │       ├── __init__.py
+│   │       └── validator.py               event schema validator
+│   ├── data/
+│   │   └── blockchain/
+│   │       └── ledger.json                blockchain ledger storage
+│   ├── keys/
+│   │   └── aes_secret.key                 AES-256 key (gitignored)
+│   ├── scripts/
+│   │   └── generate_crypto_keys.py        key generation utility
+│   ├── tests/
+│   │   ├── __init__.py
+│   │   ├── conftest.py                    pytest fixtures & config
+│   │   ├── test_api_endpoints.py          API endpoint tests
+│   │   ├── test_format_detector.py        format detection tests
+│   │   ├── test_llm_onboarding.py         LLM onboarding tests
+│   │   ├── test_onboarding.py             heuristic onboarding tests
+│   │   ├── test_parsers.py                parser unit tests
+│   │   ├── test_schema_validation.py      schema validation tests
+│   │   └── test_traceability.py           traceability tests
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/                  Overview, LogAnalyzer, EventsPage,
-│   │   │                           ParserRegistry, Traceability
-│   │   ├── components/             MetricCard, StatusChip
+│   │   ├── App.jsx                        root component + routing
+│   │   ├── main.jsx                       Vite entry point
+│   │   ├── index.css                      global styles
+│   │   ├── pages/
+│   │   │   ├── Overview.jsx               dashboard with metrics & charts
+│   │   │   ├── LogAnalyzer.jsx            unified log analysis (paste/upload)
+│   │   │   ├── ProcessLogs.jsx            secure log processing page
+│   │   │   ├── EventsPage.jsx             browse normalized events
+│   │   │   ├── ParserRegistry.jsx         view registered parsers
+│   │   │   ├── Traceability.jsx           raw ↔ normalized audit trail
+│   │   │   └── Onboarding.jsx             unknown-source onboarding UI
+│   │   ├── components/
+│   │   │   ├── MetricCard.jsx             reusable metric display card
+│   │   │   └── StatusChip.jsx             status indicator chip
 │   │   └── services/
-│   │       ├── api.js              typed fetch wrapper over the REST API
-│   │       └── secureCrypto.js     AES-256-GCM encryption + SHA-256 hashing
+│   │       ├── api.js                     typed fetch wrapper over the REST API
+│   │       └── secureCrypto.js            AES-256-GCM encryption + SHA-256 hashing
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.js
+│   ├── tailwind.config.js
+│   ├── postcss.config.js
+│   ├── nginx.conf                         production nginx config
 │   └── Dockerfile
-├── data/                           sample logs: cisco, fortigate, linux,
-│                                   windows, apache, unknown
+├── data/                                  sample logs
+│   ├── apache/                            Apache access log samples
+│   ├── cisco/                             Cisco ASA syslog samples
+│   ├── fortigate/                         Fortigate key=value samples
+│   ├── linux/                             Linux auth/syslog samples
+│   ├── windows/                           Windows Event Log samples
+│   └── unknown/                           unknown-format samples
 ├── docs/
-│   ├── architecture.md             architecture document
-│   └── SECURITY_ENCRYPTION.md      encryption flow documentation
+│   ├── architecture.md                    architecture document
+│   └── SECURITY_ENCRYPTION.md             encryption flow documentation
+├── LogNexus03_Architecture.docx
 ├── docker-compose.yml
-└── .env.example
+├── .env.example
+└── .gitignore
 ```
 
 ---
