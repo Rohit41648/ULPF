@@ -1,0 +1,8 @@
+<134>Sep 11 10:32:14 FW01 %ASA-6-302013: Built outbound TCP connection 12345 for outside:192.168.1.10/443 to 8.8.8.8/443
+<134>Sep 11 10:33:02 FW01 %ASA-6-106023: Deny tcp src inside:192.168.1.10/51322 dst outside:8.8.8.8/443 by access-group "ACL-102"
+<134>Sep 11 10:34:55 FW02 %ASA-6-302013: Built outbound UDP connection 12346 for outside:10.1.1.5/53 to 8.8.4.4/53
+<134>Sep 11 10:35:40 FW02 %ASA-6-106023: Deny tcp src inside:10.1.1.9/40213 dst outside:45.33.32.156/22 by access-group "ACL-EXT"
+<134>Sep 11 10:36:12 FW01 %ASA-6-302013: Built outbound TCP connection 12347 for outside:192.168.1.22/443 to 1.1.1.1/443
+<134>Sep 11 10:37:47 FW03 %ASA-6-106023: Deny udp src inside:192.168.2.14/33221 dst outside:203.0.113.5/161 by access-group "ACL-102"
+<134>Sep 11 10:38:19 FW03 %ASA-6-302013: Built outbound TCP connection 12348 for outside:192.168.2.9/443 to 142.250.68.14/443
+<134>Sep 11 10:39:03 FW01 %ASA-6-106023: Deny tcp src inside:192.168.1.44/59201 dst outside:198.51.100.9/3389 by access-group "ACL-RDP-BLOCK"

@@ -1,0 +1,6 @@
+date=2026-09-11 time=10:35:22 devname="FG01" srcip=10.0.0.5 srcport=51322 dstip=8.8.8.8 dstport=443 proto=6 action="accept" policyid=12 user="jdoe"
+date=2026-09-11 time=10:36:01 devname="FG01" srcip=10.0.0.9 srcport=40213 dstip=45.33.32.156 dstport=22 proto=6 action="deny" policyid=7
+date=2026-09-11 time=10:36:45 devname="FG02" srcip=10.0.1.4 srcport=33221 dstip=203.0.113.5 dstport=161 proto=17 action="deny" policyid=3
+date=2026-09-11 time=10:37:20 devname="FG02" srcip=10.0.1.8 srcport=443 dstip=142.250.68.14 dstport=443 proto=6 action="accept" policyid=12 user="asmith"
+date=2026-09-11 time=10:38:05 devname="FG01" srcip=10.0.0.15 srcport=59201 dstip=198.51.100.9 dstport=3389 proto=6 action="deny" policyid=9
+date=2026-09-11 time=10:39:12 devname="FG03" srcip=10.0.2.3 srcport=51122 dstip=1.1.1.1 dstport=53 proto=17 action="accept" policyid=1
